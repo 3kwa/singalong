@@ -133,6 +133,8 @@ def read_html_for_project(*, project, group, token):
     )
     if response.status_code == 404:
         return f"WTF ... {project}.html does not exist mate!"
+    elif response.status_code == 401:
+        return f"WTF {token} got nuked!"
     return response.text
 
 
