@@ -43,6 +43,8 @@ class Singalong:
             raise cherrypy.HTTPRedirect("authenticate")
         try:
             return read_html_for_project(project=project, group=self.group, token=token)
+        except UnknownGroup:
+            return f"WTF is your sysadmin doing! WTF is {self.group}!"
         except UnknownProject:
             return f"WTF is {project} !!!"
         except InvalidToken:
@@ -75,7 +77,12 @@ def get_group_id(*, group, token):
     response = httpx.get(
         f"{API}/groups?search={group}", headers={"PRIVATE-TOKEN": token}
     )
-    return response.json()[0]["id"]
+    if response.status_code == 401:
+        raise InvalidToken(token)
+    try:
+        return response.json()[0]["id"]
+    except KeyError:
+        raise UnknownGroup(group)
 
 
 @lru_cache()
@@ -88,7 +95,7 @@ def get_project_id(*, project, group, token):
     response = httpx.get(
         f"{API}/groups/{group_id}/projects/", headers={"PRIVATE-TOKEN": token}
     )
-    if response.status_code == 401:  # unauthorized
+    if response.status_code == 401:
         raise InvalidToken(token)
     for project_dict in response.json():
         if project_dict["name"] == project:
@@ -104,6 +111,8 @@ class InvalidToken(Exception):
 class UnknownProject(Exception):
     pass
 
+class UnknownGroup(Exception):
+    pass
 
 def read_html_for_project(*, project, group, token):
     """
