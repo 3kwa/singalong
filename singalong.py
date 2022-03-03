@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import quote_plus
 
 import cherrypy
 import click
@@ -35,14 +36,19 @@ class Singalong:
         return "OK"
 
     @cherrypy.expose
-    def default(self, project):
+    def default(self, project, *crumbs):
+        if crumbs:
+            path = "/".join(crumbs)
+        else:
+            path = project
         try:
             token = cherrypy.session["token"]
         except KeyError:
             cherrypy.session["project"] = project
-            raise cherrypy.HTTPRedirect("authenticate")
+            cherrypy.session["path"] = path
+            raise cherrypy.HTTPRedirect("/authenticate")
         try:
-            return read_html_for_project(project=project, group=self.group, token=token)
+            return read_html_for_project(path=path, project=project, group=self.group, token=token)
         except UnknownGroup:
             return f"WTF is your sysadmin doing! WTF is {self.group}!"
         except UnknownProject:
@@ -52,16 +58,17 @@ class Singalong:
             return "WTF are you !!! <a href='https://gitlab.com/-/profile/personal_access_tokens' target='_blank'>get a token</a>."
 
     @cherrypy.expose
-    def authenticate(self, project=None, token=None):
+    def authenticate(self, path=None, project=None, token=None):
         if token is not None:
             cherrypy.session["token"] = token
-            raise cherrypy.HTTPRedirect(project)
+            raise cherrypy.HTTPRedirect(f"{project}/{path}")
         return f"""<html>
           <head></head>
           <body>
-            <form method="POST" action="authenticate">
+            <form method="POST" action="/authenticate">
               <input type="text" value="" name="token" />
               <input type="hidden" value="{cherrypy.session["project"]}" name="project" />
+              <input type="hidden" value="{cherrypy.session["path"]}" name="path" />
               <button type="submit">authenticate</button>
             </form>
           </body>
@@ -114,7 +121,7 @@ class UnknownProject(Exception):
 class UnknownGroup(Exception):
     pass
 
-def read_html_for_project(*, project, group, token):
+def read_html_for_project(*, path, project, group, token):
     """
     >>> print(read_html_for_project(project="healthcheck", group="PNCKS", token="glpat-4vFiVNbFsqAVDesBYRGV")) #doctest: +ELLIPSIS
     <!DOCTYPE HTML>
@@ -128,7 +135,7 @@ def read_html_for_project(*, project, group, token):
     """
     # https://docs.gitlab.com/ee/api/repository_files.html#get-raw-file-from-repository
     response = httpx.get(
-        f"{API}/projects/{get_project_id(project=project, group=group, token=token)}/repository/files/{project}.html/raw",
+        f"{API}/projects/{get_project_id(project=project, group=group, token=token)}/repository/files/{quote_plus(path)}.html/raw",
         headers={"PRIVATE-TOKEN": token},
     )
     if response.status_code == 404:
