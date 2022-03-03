@@ -63,13 +63,33 @@ class Singalong:
             cherrypy.session["token"] = token
             raise cherrypy.HTTPRedirect(f"{project}/{path}")
         return f"""<html>
-          <head></head>
+          <head>
+          <style>
+          html, body {{
+              margin: 0;
+              padding: 0;
+          }}
+          form {{
+              background-color: lightseagreen;
+          }}
+          table {{
+              width: 100%;
+          }}
+          input, button {{
+            width: 100%;
+          }}
+          </style>
+          </head>
           <body>
             <form method="POST" action="/authenticate">
-              <input type="text" value="" name="token" />
+              <table>
+              <tr><td width="90%">
+              <input type="password" value="" name="token" />
+              </td><td>
+              <button type="submit">authenticate</button>
+              </tr></table>
               <input type="hidden" value="{cherrypy.session["project"]}" name="project" />
               <input type="hidden" value="{cherrypy.session["path"]}" name="path" />
-              <button type="submit">authenticate</button>
             </form>
           </body>
         </html>"""
