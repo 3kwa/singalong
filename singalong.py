@@ -101,9 +101,7 @@ def get_group_id(*, group, token):
     >>> get_group_id(group="PNCKS", token="glpat-4vFiVNbFsqAVDesBYRGV")
     14660398
     """
-    response = httpx.get(
-        f"{API}/groups?search={group}", headers={"PRIVATE-TOKEN": token}
-    )
+    response = httpx.get(f"{API}/groups?search={group}", headers={"PRIVATE-TOKEN": token})
     if response.status_code == 401:
         raise InvalidToken(token)
     try:
@@ -118,17 +116,31 @@ def get_project_id(*, project, group, token):
     >>> get_project_id(project="healthcheck", group="PNCKS", token="glpat-4vFiVNbFsqAVDesBYRGV")
     33978260
     """
-    group_id = get_group_id(group=group, token=token)
-    response = httpx.get(
-        f"{API}/groups/{group_id}/projects/", headers={"PRIVATE-TOKEN": token}
-    )
-    if response.status_code == 401:
-        raise InvalidToken(token)
-    for project_dict in response.json():
-        if project_dict["name"] == project:
-            return project_dict["id"]
-    else:
+    projects = list_all_projects(group=group, token=token)
+    if project not in projects:
         raise UnknownProject(project)
+    return projects[project]
+
+
+def list_all_projects(*, group, token):
+    projects = {}
+    group_id = get_group_id(group=group, token=token)
+    url = f"{API}/groups/{group_id}/projects/"
+    while url:
+        response = httpx.get(url, headers={"PRIVATE-TOKEN": token})
+        if response.status_code == 401:
+            raise InvalidToken(token)
+        for project in response.json():
+            projects[project["name"]] = project["id"]
+        # handling pagination
+        link = response.headers["link"]
+        for link_rel in link.split(","):
+            if 'rel="next"' in link_rel:
+                url = link_rel.split(";")[0][1:-1]
+                break
+        else:
+            url = None
+    return projects
 
 
 class InvalidToken(Exception):
@@ -138,8 +150,10 @@ class InvalidToken(Exception):
 class UnknownProject(Exception):
     pass
 
+
 class UnknownGroup(Exception):
     pass
+
 
 def read_html_for_project(*, path, project, group, token):
     """
